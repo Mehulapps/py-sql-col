@@ -69,14 +69,18 @@ def parse_column(identifier, tables):
     Parses an individual column to extract its alias, source column, and table.
     :param identifier: A sqlparse Identifier or Function object.
     :param tables: Dictionary mapping aliases to table names.
-    :return: Tuple (output_column, source_column, source_table).
+    :return: Tuple (output_column, source_column, source_table) or None for irrelevant tokens.
     """
     # Ensure identifier is either an Identifier or Function
     if not isinstance(identifier, (Identifier, Function)):
         return None  # Skip irrelevant tokens
 
-    output_column = identifier.get_alias() or identifier.get_real_name()
-    source_column = identifier.get_real_name()
+    # Attempt to extract alias and real name safely
+    try:
+        output_column = identifier.get_alias() or identifier.get_real_name()
+        source_column = identifier.get_real_name()
+    except AttributeError:
+        return None  # Skip if the token doesn't support these methods
 
     # Determine the source table
     source_table = "Unknown"
@@ -94,7 +98,6 @@ def parse_column(identifier, tables):
         source_table = next(iter(tables.values()), "Unknown")  # Default to the first table
 
     return output_column, source_column, source_table
-
 
 def parse_select_statement(query):
     """
@@ -147,10 +150,8 @@ def process_csv(input_file, output_file):
     except Exception as e:
         print(f"An error occurred: {e}")
 
+if __name__ == "__main__":
+    input_csv_path = "input.csv"  # Replace with your input file path
+    output_csv_path = "output.csv"  # Replace with your desired output file path
 
-# File paths
-input_csv_path = "/mnt/data/sql_column_export_testdata - Sheet1.csv"  # Input file
-output_csv_path = "/mnt/data/output_parsed_columns.csv"  # Output file
-
-# Process the CSV file
-process_csv(input_csv_path, output_csv_path)
+    process_csv(input_csv_path, output_csv_path)
