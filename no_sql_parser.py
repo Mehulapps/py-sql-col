@@ -28,6 +28,9 @@ def parse_select_statement(query):
     """
     result = []
     
+    # Normalize line endings for Windows compatibility
+    query = query.replace('\r\n', ' ').replace('\n', ' ').strip()
+
     # Extract SELECT and FROM parts
     select_match = re.search(r"SELECT(.*?)FROM", query, re.IGNORECASE | re.DOTALL)
     from_match = re.search(r"FROM(.*?)(WHERE|GROUP BY|ORDER BY|$)", query, re.IGNORECASE | re.DOTALL)
@@ -62,6 +65,7 @@ def parse_select_statement(query):
         result.append((output_column, column, source_table))
     
     return result
+
 
 def process_csv(input_file, output_file):
     """
