@@ -1,68 +1,101 @@
 import csv
 import sqlparse
-from sqlparse.sql import IdentifierList, Identifier
+from sqlparse.sql import IdentifierList, Identifier, Function
 from sqlparse.tokens import Keyword, DML
 
-def extract_table_name(from_clause):
+def extract_tables(parsed_tokens):
     """
-    Extracts table names from the FROM clause.
-    :param from_clause: Parsed SQL token representing the FROM clause.
-    :return: List of table names.
+    Extracts table names and aliases from the FROM clause.
+    :param parsed_tokens: Tokens parsed from the SQL query.
+    :return: Dictionary mapping aliases to table names.
     """
-    tables = []
-    for token in from_clause.tokens:
-        if isinstance(token, Identifier):
-            tables.append(token.get_real_name())
+    tables = {}
+    from_seen = False
+
+    for token in parsed_tokens:
+        if from_seen:
+            if isinstance(token, IdentifierList):
+                for identifier in token.get_identifiers():
+                    table_name, alias = extract_table_alias(identifier)
+                    tables[alias] = table_name
+            elif isinstance(token, Identifier):
+                table_name, alias = extract_table_alias(token)
+                tables[alias] = table_name
+            elif token.ttype is Keyword and token.value.upper() in ("WHERE", "GROUP BY", "ORDER BY"):
+                break  # End of FROM clause
+        elif token.ttype is Keyword and token.value.upper() == "FROM":
+            from_seen = True
     return tables
 
-def parse_sql_query(query):
+def extract_table_alias(identifier):
+    """
+    Extracts the table name and its alias from an identifier.
+    :param identifier: A sqlparse Identifier object.
+    :return: Tuple of (table_name, alias).
+    """
+    alias = identifier.get_alias() or identifier.get_real_name()
+    table_name = identifier.get_real_name()
+    return table_name, alias
+
+def extract_columns(parsed_tokens, tables):
+    """
+    Extracts columns, aliases, and their corresponding tables from the SELECT clause.
+    :param parsed_tokens: Tokens parsed from the SQL query.
+    :param tables: Dictionary mapping aliases to table names.
+    :return: List of tuples (output_column, source_column, source_table).
+    """
+    columns = []
+    select_seen = False
+
+    for token in parsed_tokens:
+        if select_seen:
+            if isinstance(token, IdentifierList):
+                for identifier in token.get_identifiers():
+                    column_data = parse_column(identifier, tables)
+                    if column_data:
+                        columns.append(column_data)
+            elif isinstance(token, (Identifier, Function)):
+                column_data = parse_column(token, tables)
+                if column_data:
+                    columns.append(column_data)
+            elif token.ttype is Keyword and token.value.upper() == "FROM":
+                break  # End of SELECT clause
+        elif token.ttype is DML and token.value.upper() == "SELECT":
+            select_seen = True
+    return columns
+
+def parse_column(identifier, tables):
+    """
+    Parses an individual column to extract its alias, source column, and table.
+    :param identifier: A sqlparse Identifier or Function object.
+    :param tables: Dictionary mapping aliases to table names.
+    :return: Tuple (output_column, source_column, source_table).
+    """
+    output_column = identifier.get_alias() or identifier.get_real_name()
+    source_column = identifier.get_real_name()
+
+    # Determine the source table
+    source_table = "Unknown"
+    if "." in source_column:
+        alias, column_name = source_column.split(".", 1)
+        source_table = tables.get(alias, "Unknown")
+        source_column = column_name
+    elif identifier.is_function:
+        source_column = str(identifier)  # Keep the entire function as the source column
+        source_table = "Unknown"
+
+    return output_column, source_column, source_table
+
+def parse_select_statement(query):
     """
     Parses a SQL SELECT statement to extract column aliases, original columns, and source tables.
     :param query: SQL query string.
     :return: List of tuples (output_column, source_column, source_table).
     """
-    parsed = sqlparse.parse(query)[0]  # Parse the query
-    columns = []
-    tables = []
-
-    # Process SELECT and FROM parts
-    in_select = False
-    in_from = False
-
-    for token in parsed.tokens:
-        if token.ttype is DML and token.value.upper() == 'SELECT':
-            in_select = True
-            continue
-        if token.ttype is Keyword and token.value.upper() == 'FROM':
-            in_select = False
-            in_from = True
-            continue
-
-        if in_select:
-            # Extract columns
-            if isinstance(token, IdentifierList):
-                for identifier in token.get_identifiers():
-                    alias = identifier.get_alias() or identifier.get_real_name()
-                    source = identifier.get_real_name()
-                    columns.append((alias, source))
-            elif isinstance(token, Identifier):
-                alias = token.get_alias() or token.get_real_name()
-                source = token.get_real_name()
-                columns.append((alias, source))
-
-        if in_from:
-            # Extract tables
-            if isinstance(token, IdentifierList):
-                tables.extend([table.get_real_name() for table in token.get_identifiers()])
-            elif isinstance(token, Identifier):
-                tables.append(token.get_real_name())
-
-    # Assume all columns belong to the first table for simplicity
-    if tables:
-        source_table = tables[0]
-        return [(col[0], col[1], source_table) for col in columns]
-
-    return []
+    parsed = sqlparse.parse(query)[0]  # Parse the query into tokens
+    tables = extract_tables(parsed.tokens)
+    columns = extract_columns(parsed.tokens, tables)
+    return columns
 
 def process_csv(input_file, output_file):
     """
@@ -79,7 +112,7 @@ def process_csv(input_file, output_file):
                 logical_name = row['logical_name']
                 select_statement = row['select_statement']
 
-                parsed_columns = parse_sql_query(select_statement)
+                parsed_columns = parse_select_statement(select_statement)
                 for output_column, source_column, source_table in parsed_columns:
                     rows.append({
                         "logical_name": logical_name,
@@ -100,10 +133,7 @@ def process_csv(input_file, output_file):
             writer.writerows(rows)
 
         print(f"Output successfully written to {output_file}")
-
-    except Exception as e:
-        print(f"An error occurred: {e}")
-
+        
 # File paths
 input_csv_path = "/mnt/data/sql_column_export_testdata - Sheet1.csv"  # Input file
 output_csv_path = "/mnt/data/output_parsed_columns.csv"  # Output file
