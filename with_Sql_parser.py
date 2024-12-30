@@ -1,4 +1,5 @@
 import csv
+import re
 import sqlparse
 from sqlparse.sql import IdentifierList, Identifier, Function
 from sqlparse.tokens import Keyword, DML
@@ -74,11 +75,30 @@ def parse_column(identifier, tables):
         print(f"Error processing column: {identifier}, error: {e}")
         return None
 
+def split_union_queries(query):
+    queries = []
+    parsed = sqlparse.parse(query)
+
+    for stmt in parsed:
+        if stmt.get_type() == "SELECT":
+            queries.append(str(stmt).strip())
+        else:
+            union_parts = re.split(r"\bUNION(?: ALL)?\b", str(stmt), flags=re.IGNORECASE)
+            queries.extend([part.strip() for part in union_parts])
+
+    return queries
+
 def parse_select_statement(query):
-    parsed = sqlparse.parse(query)[0]
-    tables = extract_tables(parsed.tokens)
-    columns = extract_columns(parsed.tokens, tables)
-    return columns
+    queries = split_union_queries(query)
+    all_columns = []
+
+    for subquery in queries:
+        parsed = sqlparse.parse(subquery)[0]  # Parse the query into tokens
+        tables = extract_tables(parsed.tokens)
+        columns = extract_columns(parsed.tokens, tables)
+        all_columns.extend(columns)
+
+    return all_columns
 
 def process_csv(input_file, output_file):
     rows = []
@@ -110,6 +130,12 @@ def process_csv(input_file, output_file):
 
     except Exception as e:
         print(f"An error occurred: {e}")
+
+if __name__ == "__main__":
+    input_csv_path = "input.csv"
+    output_csv_path = "output.csv"
+    process_csv(input_csv_path, output_csv_path)
+
 
 
 
