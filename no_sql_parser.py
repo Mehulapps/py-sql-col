@@ -1,6 +1,25 @@
 import csv
 import re
 
+def parse_from_clause(from_clause):
+    """
+    Parses the FROM clause to extract table names and their aliases.
+    :param from_clause: The FROM clause as a string.
+    :return: Dictionary mapping aliases to table names.
+    """
+    table_alias_map = {}
+    # Split the FROM clause by commas to handle multiple tables
+    tables = [table.strip() for table in from_clause.split(",")]
+    for table in tables:
+        parts = table.split()
+        if len(parts) == 2:  # Table with alias
+            table_name, alias = parts
+            table_alias_map[alias] = table_name
+        elif len(parts) == 1:  # Table without alias
+            table_name = parts[0]
+            table_alias_map[table_name] = table_name
+    return table_alias_map
+
 def parse_select_statement(query):
     """
     Parses a SQL SELECT statement to extract column aliases, original columns, and source tables.
@@ -19,8 +38,8 @@ def parse_select_statement(query):
     select_part = select_match.group(1).strip()
     from_part = from_match.group(1).strip()
 
-    # Get the first table from the FROM part
-    source_table = from_part.split()[0]
+    # Parse FROM clause to get table and alias mappings
+    table_alias_map = parse_from_clause(from_part)
 
     # Parse SELECT columns
     columns = [col.strip() for col in select_part.split(",")]
@@ -28,9 +47,17 @@ def parse_select_statement(query):
         if " AS " in col.upper():
             source_column, output_column = map(str.strip, re.split(r" AS ", col, flags=re.IGNORECASE))
         else:
-            source_column = output_column = col
+            source_column = output_column = col.strip()
 
-        result.append((output_column, source_column, source_table))
+        # Identify the table alias used in the column
+        if "." in source_column:
+            alias, column = source_column.split(".", 1)
+            source_table = table_alias_map.get(alias, "Unknown")
+        else:
+            column = source_column
+            source_table = next(iter(table_alias_map.values()), "Unknown")  # Default to the first table
+
+        result.append((output_column, column, source_table))
     
     return result
 
