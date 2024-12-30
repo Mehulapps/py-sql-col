@@ -42,8 +42,10 @@ def parse_select_statement(query):
     table_alias_map = parse_from_clause(from_part)
 
     # Parse SELECT columns
-    columns = [col.strip() for col in select_part.split(",")]
+    # Match columns, including those with functions like TO_DATE(), TO_CHAR(), etc.
+    columns = re.split(r",(?![^(]*\))", select_part)  # Split by commas not inside parentheses
     for col in columns:
+        col = col.strip()
         if " AS " in col.upper():
             source_column, output_column = map(str.strip, re.split(r" AS ", col, flags=re.IGNORECASE))
         else:
@@ -100,6 +102,8 @@ def process_csv(input_file, output_file):
 
     except Exception as e:
         print(f"An error occurred: {e}")
+
+
 
 # File paths
 input_csv_path = "/mnt/data/sql_column_export_testdata - Sheet1.csv"  # Input file
