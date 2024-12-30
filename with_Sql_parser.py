@@ -76,13 +76,18 @@ def parse_column(identifier, tables):
 
     # Determine the source table
     source_table = "Unknown"
-    if "." in source_column:
+    if isinstance(identifier, Function):
+        # It's a function, keep it intact
+        source_column = str(identifier)  # Keep the entire function as the source column
+        source_table = "Unknown"
+    elif "." in source_column:
+        # It's in the form alias.column
         alias, column_name = source_column.split(".", 1)
         source_table = tables.get(alias, "Unknown")
         source_column = column_name
-    elif identifier.is_function:
-        source_column = str(identifier)  # Keep the entire function as the source column
-        source_table = "Unknown"
+    else:
+        # No alias, assume it's just a column name
+        source_table = next(iter(tables.values()), "Unknown")  # Default to the first table
 
     return output_column, source_column, source_table
 
