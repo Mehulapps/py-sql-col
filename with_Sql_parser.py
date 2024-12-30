@@ -4,11 +4,6 @@ from sqlparse.sql import IdentifierList, Identifier, Function
 from sqlparse.tokens import Keyword, DML
 
 def extract_tables(parsed_tokens):
-    """
-    Extracts table names and aliases from the FROM clause.
-    :param parsed_tokens: Tokens parsed from the SQL query.
-    :return: Dictionary mapping aliases to table names.
-    """
     tables = {}
     from_seen = False
 
@@ -22,28 +17,17 @@ def extract_tables(parsed_tokens):
                 table_name, alias = extract_table_alias(token)
                 tables[alias] = table_name
             elif token.ttype is Keyword and token.value.upper() in ("WHERE", "GROUP BY", "ORDER BY"):
-                break  # End of FROM clause
+                break
         elif token.ttype is Keyword and token.value.upper() == "FROM":
             from_seen = True
     return tables
 
 def extract_table_alias(identifier):
-    """
-    Extracts the table name and its alias from an identifier.
-    :param identifier: A sqlparse Identifier object.
-    :return: Tuple of (table_name, alias).
-    """
     alias = identifier.get_alias() or identifier.get_real_name()
     table_name = identifier.get_real_name()
     return table_name, alias
 
 def extract_columns(parsed_tokens, tables):
-    """
-    Extracts columns, aliases, and their corresponding tables from the SELECT clause.
-    :param parsed_tokens: Tokens parsed from the SQL query.
-    :param tables: Dictionary mapping aliases to table names.
-    :return: List of tuples (output_column, source_column, source_table).
-    """
     columns = []
     select_seen = False
 
@@ -59,72 +43,51 @@ def extract_columns(parsed_tokens, tables):
                 if column_data:
                     columns.append(column_data)
             elif token.ttype is Keyword and token.value.upper() == "FROM":
-                break  # End of SELECT clause
+                break
+            else:
+                print(f"Unexpected token in SELECT clause: {token}")
         elif token.ttype is DML and token.value.upper() == "SELECT":
             select_seen = True
     return columns
 
 def parse_column(identifier, tables):
-    """
-    Parses an individual column to extract its alias, source column, and table.
-    :param identifier: A sqlparse Identifier or Function object.
-    :param tables: Dictionary mapping aliases to table names.
-    :return: Tuple (output_column, source_column, source_table) or None for irrelevant tokens.
-    """
-    # Ensure identifier is either an Identifier or Function
     if not isinstance(identifier, (Identifier, Function)):
-        return None  # Skip irrelevant tokens
+        return None
 
-    # Attempt to extract alias and real name safely
     try:
         output_column = identifier.get_alias() or identifier.get_real_name()
         source_column = identifier.get_real_name()
-    except AttributeError:
-        return None  # Skip if the token doesn't support these methods
 
-    # Determine the source table
-    source_table = "Unknown"
-    if isinstance(identifier, Function):
-        # It's a function, keep it intact
-        source_column = str(identifier)  # Keep the entire function as the source column
         source_table = "Unknown"
-    elif "." in source_column:
-        # It's in the form alias.column
-        alias, column_name = source_column.split(".", 1)
-        source_table = tables.get(alias, "Unknown")
-        source_column = column_name
-    else:
-        # No alias, assume it's just a column name
-        source_table = next(iter(tables.values()), "Unknown")  # Default to the first table
+        if isinstance(identifier, Function):
+            source_column = str(identifier)
+        elif "." in source_column:
+            alias, column_name = source_column.split(".", 1)
+            source_table = tables.get(alias, "Unknown")
+            source_column = column_name
+        else:
+            source_table = next(iter(tables.values()), "Unknown")
 
-    return output_column, source_column, source_table
+        return output_column, source_column, source_table
+
+    except Exception as e:
+        print(f"Error processing column: {identifier}, error: {e}")
+        return None
 
 def parse_select_statement(query):
-    """
-    Parses a SQL SELECT statement to extract column aliases, original columns, and source tables.
-    :param query: SQL query string.
-    :return: List of tuples (output_column, source_column, source_table).
-    """
-    parsed = sqlparse.parse(query)[0]  # Parse the query into tokens
+    parsed = sqlparse.parse(query)[0]
     tables = extract_tables(parsed.tokens)
     columns = extract_columns(parsed.tokens, tables)
     return columns
 
 def process_csv(input_file, output_file):
-    """
-    Reads a CSV file and processes SQL queries to extract column and table information.
-    :param input_file: Path to input CSV.
-    :param output_file: Path to output CSV.
-    """
     rows = []
     try:
         with open(input_file, mode='r', encoding='utf-8') as csv_file:
             reader = csv.DictReader(csv_file)
-
             for row in reader:
                 logical_name = row['logical_name']
                 select_statement = row['select_statement']
-
                 parsed_columns = parse_select_statement(select_statement)
                 for output_column, source_column, source_table in parsed_columns:
                     rows.append({
@@ -134,7 +97,6 @@ def process_csv(input_file, output_file):
                         "source_table_name": source_table
                     })
 
-        # Write results to output CSV
         with open(output_file, mode='w', newline='', encoding='utf-8') as csv_out:
             writer = csv.DictWriter(csv_out, fieldnames=[
                 "logical_name",
@@ -144,11 +106,12 @@ def process_csv(input_file, output_file):
             ])
             writer.writeheader()
             writer.writerows(rows)
-
         print(f"Output successfully written to {output_file}")
 
     except Exception as e:
         print(f"An error occurred: {e}")
+
+
 
 if __name__ == "__main__":
     input_csv_path = "input.csv"  # Replace with your input file path
