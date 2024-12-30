@@ -71,6 +71,10 @@ def parse_column(identifier, tables):
     :param tables: Dictionary mapping aliases to table names.
     :return: Tuple (output_column, source_column, source_table).
     """
+    # Ensure identifier is either an Identifier or Function
+    if not isinstance(identifier, (Identifier, Function)):
+        return None  # Skip irrelevant tokens
+
     output_column = identifier.get_alias() or identifier.get_real_name()
     source_column = identifier.get_real_name()
 
@@ -90,6 +94,7 @@ def parse_column(identifier, tables):
         source_table = next(iter(tables.values()), "Unknown")  # Default to the first table
 
     return output_column, source_column, source_table
+
 
 def parse_select_statement(query):
     """
