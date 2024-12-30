@@ -19,6 +19,7 @@ def parse_from_clause(from_clause):
             table_name = parts[0]
             table_alias_map[table_name] = table_name
     return table_alias_map
+    
 
 def parse_select_statement(query):
     """
@@ -54,17 +55,24 @@ def parse_select_statement(query):
         else:
             source_column = output_column = col.strip()
 
-        # Identify the table alias used in the column
-        if "." in source_column:
+        # Determine if the source_column contains a function
+        if "(" in source_column and ")" in source_column:
+            # It's a function, keep it intact
+            column = source_column
+            source_table = "Unknown"  # Table detection for functions is ambiguous
+        elif "." in source_column:
+            # It's in the form alias.column
             alias, column = source_column.split(".", 1)
             source_table = table_alias_map.get(alias, "Unknown")
         else:
+            # No alias, assume it's just a column name
             column = source_column
             source_table = next(iter(table_alias_map.values()), "Unknown")  # Default to the first table
 
         result.append((output_column, column, source_table))
     
     return result
+
 
 
 def process_csv(input_file, output_file):
