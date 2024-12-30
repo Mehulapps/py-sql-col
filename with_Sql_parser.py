@@ -133,7 +133,11 @@ def process_csv(input_file, output_file):
             writer.writerows(rows)
 
         print(f"Output successfully written to {output_file}")
-        
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
+
 # File paths
 input_csv_path = "/mnt/data/sql_column_export_testdata - Sheet1.csv"  # Input file
 output_csv_path = "/mnt/data/output_parsed_columns.csv"  # Output file
