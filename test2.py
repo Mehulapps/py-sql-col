@@ -48,12 +48,3 @@ except ValueError as e:
 # Y             1     2      3
 # Z             2     0      2
 
-Changes Made:
- * Function Name: The function is renamed to pivot_and_count_flexible to reflect the change in behavior.
- * Value Processing:
-   * Inside the function, before grouping, a new processed_values Series is created.
-   * df[value_col].apply(lambda x: bool(x) if isinstance(x, bool) else False) is used to process the values in the specified value_col:
-     * If a value is already a boolean (isinstance(x, bool)), it's kept as is (bool(x)).
-     * If a value is not a boolean, it's explicitly treated as False.
- * Grouping and Aggregation: The rest of the logic remains the same, but the grouping is now done on the original df[index_col] and the aggregation (sum and count) is performed on the processed_values Series. This ensures that the 'True' count reflects the number of actual True boolean values and values that evaluate to True (if you hadn't explicitly forced non-booleans to False), while non-boolean values are counted towards 'False'.
-Now, when you run this function on a DataFrame with a column containing mixed data types, the non-boolean values will be treated as False for the counting purposes.
