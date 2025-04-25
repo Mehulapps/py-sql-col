@@ -1,41 +1,98 @@
 import pandas as pd
 from openpyxl import load_workbook
-from openpyxl.worksheet.pivot_table import PivotTable, PivotCache, PivotCacheDefinition, DataField, PivotField
+from openpyxl.pivot.table import PivotTable, PivotTableStyleInfo
+from openpyxl.worksheet.cell_range import CellRange
+from openpyxl.utils import get_column_letter
 
-# Step 1: Create a DataFrame
+# 1. Create a Sample DataFrame
 data = {
-    'Category': ['Fruit', 'Fruit', 'Vegetable', 'Vegetable', 'Fruit'],
-    'Item': ['Apple', 'Banana', 'Carrot', 'Tomato', 'Banana'],
-    'Amount': [10, 20, 15, 30, 5]
+    'Region': ['North', 'South', 'East', 'West', 'North', 'South', 'East', 'West', 'North', 'South'],
+    'Category': ['A', 'B', 'A', 'C', 'B', 'A', 'C', 'A', 'C', 'B'],
+    'Product': ['P1', 'P2', 'P1', 'P3', 'P2', 'P1', 'P3', 'P1', 'P3', 'P2'],
+    'Sales': [100, 150, 120, 200, 90, 110, 210, 130, 220, 160],
+    'Quantity': [10, 15, 12, 20, 9, 11, 21, 13, 22, 16]
 }
 df = pd.DataFrame(data)
 
-# Step 2: Save DataFrame to Excel
-excel_file = 'pivot_example.xlsx'
-df.to_excel(excel_file, sheet_name='Data', index=False)
+# 2. Define File and Sheet Names
+excel_filename = 'data_with_pivot.xlsx'
+data_sheet_name = 'DataSource'
+pivot_sheet_name = 'SalesPivotTable'
 
-# Step 3: Load the workbook and sheet
-wb = load_workbook(excel_file)
-ws = wb['Data']
+print(f"Writing DataFrame to '{excel_filename}', sheet '{data_sheet_name}'...")
 
-# Step 4: Create Pivot Cache
-pivot_cache = PivotCache(cacheId=1, cacheSource='worksheet', worksheet=ws.title)
+# 3. Use pd.ExcelWriter to write data and keep file open for openpyxl
+# This automatically handles saving at the end of the 'with' block
+try:
+    with pd.ExcelWriter(excel_filename, engine='openpyxl') as writer:
+        # Write the DataFrame to the 'DataSource' sheet
+        df.to_excel(writer, sheet_name=data_sheet_name, index=False)
 
-# Step 5: Create Pivot Table
-pivot_table = PivotTable(
-    cache=pivot_cache,
-    ref="E4"  # where you want to place the pivot table
-)
+        # Get the openpyxl workbook and worksheet objects from the writer
+        workbook = writer.book
+        data_sheet = writer.sheets[data_sheet_name]
 
-# Step 6: Add Pivot Fields
-pivot_table.rowFields.append(PivotField(name='Category'))
-pivot_table.rowFields.append(PivotField(name='Item'))
-pivot_table.dataFields.append(DataField(name='Amount', summarizeFunction='sum'))
+        print(f"Creating pivot table on sheet '{pivot_sheet_name}'...")
 
-# Step 7: Add the Pivot Table to the sheet
-ws.add_pivot(pivot_table)
+        # 4. Create the sheet for the pivot table
+        pivot_sheet = workbook.create_sheet(title=pivot_sheet_name)
 
-# Step 8: Save the workbook
-wb.save(excel_file)
+        # 5. Define the range of the source data (including headers)
+        max_row = data_sheet.max_row
+        max_col = data_sheet.max_column
+        data_range_ref = CellRange(min_col=1, min_row=1, max_col=max_col, max_row=max_row)
+        # Alternative using Reference (less direct for full range):
+        # from openpyxl.worksheet.dimensions import DimensionHolder, Dimension
+        # data_range_ref = Reference(data_sheet, min_col=1, min_row=1, max_col=max_col, max_row=max_row)
 
-print(f"Pivot Table created successfully in '{excel_file}'!")
+        # 6. Define Pivot Table Rows
+        # References point to the *header* cells (Row 1) of the desired row fields
+        pivot_rows = []
+        # Add 'Region' (Column 1) as a row field
+        pivot_rows.append(CellRange(min_col=1, min_row=1, max_col=1, max_row=1)) # Reference to A1
+        # Add 'Category' (Column 2) as another row field
+        pivot_rows.append(CellRange(min_col=2, min_row=1, max_col=2, max_row=1)) # Reference to B1
+
+        # 7. Define Pivot Table Data/Values
+        # References point to the *data* cells (Row 2 onwards) for aggregation
+        pivot_data = []
+        # Add 'Sales' (Column 4) to be summed
+        sales_col_letter = get_column_letter(df.columns.get_loc('Sales') + 1) # +1 for 1-based index
+        sales_range_ref = CellRange(f'{sales_col_letter}2:{sales_col_letter}{max_row}')
+        pivot_data.append((sales_range_ref, 'Sum of Sales', 'sum'))
+
+        # Add 'Quantity' (Column 5) to be summed
+        qty_col_letter = get_column_letter(df.columns.get_loc('Quantity') + 1)
+        qty_range_ref = CellRange(f'{qty_col_letter}2:{qty_col_letter}{max_row}')
+        pivot_data.append((qty_range_ref, 'Total Quantity', 'sum'))
+
+        # Add 'Sales' (Column 4) to be averaged
+        # Using the same range ref as sum, but changing name and function
+        pivot_data.append((sales_range_ref, 'Average Sales', 'average'))
+
+
+        # 8. Create the PivotTable object
+        # Note: openpyxl handles PivotCache creation automatically if location is None
+        pt = PivotTable(name="SalesPivot", location=None) # location=None lets openpyxl manage cache
+
+        # Assign the defined components
+        pt.data_source = data_range_ref # Where the raw data lives
+        pt.rows = pivot_rows             # Fields to use as rows
+        # pt.cols = []                   # Define column fields here if needed
+        pt.data = pivot_data             # Fields to aggregate in the values area
+
+        # Optional: Apply a style
+        pt.style = PivotTableStyleInfo(name="PivotStyleMedium9", showRowHeaders=True,
+                                        showColHeaders=True, showRowStripes=False,
+                                        showColStripes=False, firstHeaderRow=True,
+                                        firstDataRow=False)
+
+        # 9. Add the pivot table to the desired sheet ('PivotSheet') at cell 'A1'
+        pivot_sheet.add_pivot_table(pt, "A1")
+
+        print(f"Pivot table '{pt.name}' created successfully.")
+
+    print(f"Workbook '{excel_filename}' saved successfully.")
+
+except Exception as e:
+    print(f"An error occurred: {e}")
