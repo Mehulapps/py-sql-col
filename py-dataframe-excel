@@ -1,0 +1,28 @@
+import pandas as pd
+
+def write_df_to_excel(df, file_name, sheet_name):
+    """
+    Write a pandas DataFrame to a named Excel file and worksheet, preserving column names.
+    
+    Parameters:
+    df (pandas.DataFrame): The DataFrame to write
+    file_name (str): Name of the Excel file (e.g., 'output.xlsx')
+    sheet_name (str): Name of the worksheet
+    """
+    # Create ExcelWriter object
+    with pd.ExcelWriter(file_name, engine='openpyxl') as writer:
+        # Write DataFrame to specified sheet, including column names
+        df.to_excel(writer, sheet_name=sheet_name, index=False)
+
+# Example usage
+if __name__ == "__main__":
+    # Sample DataFrame
+    data = {
+        'Name': ['Alice', 'Bob', 'Charlie'],
+        'Age': [25, 30, 35],
+        'City': ['New York', 'London', 'Paris']
+    }
+    df = pd.DataFrame(data)
+    
+    # Write to Excel
+    write_df_to_excel(df, 'sample_output.xlsx', 'EmployeeData')
