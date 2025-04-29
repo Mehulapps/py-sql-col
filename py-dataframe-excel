@@ -14,15 +14,43 @@ def write_df_to_excel(df, file_name, sheet_name):
         # Write DataFrame to specified sheet, including column names
         df.to_excel(writer, sheet_name=sheet_name, index=False)
 
+
+def write_df_to_excel_with_pivot(df, file_name, sheet_name, pivot_sheet_name):
+    """
+    Write a pandas DataFrame to a named Excel file and worksheet, preserving column names,
+    and create a pivot table in another sheet within the same file.
+    
+    Parameters:
+    df (pandas.DataFrame): The DataFrame to write
+    file_name (str): Name of the Excel file (e.g., 'output.xlsx')
+    sheet_name (str): Name of the worksheet for raw data
+    pivot_sheet_name (str): Name of the worksheet for pivot table
+    """
+    # Create ExcelWriter object
+    with pd.ExcelWriter(file_name, engine='openpyxl') as writer:
+        # Write original DataFrame to specified sheet, including column names
+        df.to_excel(writer, sheet_name=sheet_name, index=False)
+        
+        # Create a pivot table (example: count of entries by City)
+        pivot_table = pd.pivot_table(
+            df,
+            values='Name',  # Column to aggregate
+            index='City',   # Column to group by
+            aggfunc='count' # Aggregation function
+        ).reset_index()
+        
+        # Write pivot table to another sheet
+        pivot_table.to_excel(writer, sheet_name=pivot_sheet_name, index=False)
+
 # Example usage
 if __name__ == "__main__":
     # Sample DataFrame
     data = {
-        'Name': ['Alice', 'Bob', 'Charlie'],
-        'Age': [25, 30, 35],
-        'City': ['New York', 'London', 'Paris']
+        'Name': ['Alice', 'Bob', 'Charlie', 'David', 'Eve'],
+        'Age': [25, 30, 35, 28, 22],
+        'City': ['New York', 'London', 'Paris', 'New York', 'London']
     }
     df = pd.DataFrame(data)
     
-    # Write to Excel
-    write_df_to_excel(df, 'sample_output.xlsx', 'EmployeeData')
+    # Write to Excel with pivot table
+    write_df_to_excel_with_pivot(df, 'sample_output.xlsx', 'EmployeeData', 'CityPivot')
