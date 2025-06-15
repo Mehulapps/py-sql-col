@@ -1,0 +1,66 @@
+import argparse
+import os
+from dotenv import load_dotenv
+
+def get_variable(variable_name, prompt_message):
+    """
+    Attempts to get a variable in the following order:
+    1. Command line argument
+    2. Environment variable
+    3. .env file
+    4. User prompt
+
+    Args:
+        variable_name (str): The name of the variable to retrieve (e.g., 'API_KEY').
+        prompt_message (str): The message to display if prompting the user.
+
+    Returns:
+        str: The value of the variable.
+    """
+
+    # 1. Check command line arguments
+    parser = argparse.ArgumentParser(description=f"Script that uses {variable_name}")
+    parser.add_argument(f'--{variable_name.lower()}', type=str, help=f'Specify the {variable_name}')
+    args, unknown = parser.parse_known_args() # Use parse_known_args to allow other arguments
+
+    # Prioritize the command-line argument if it was provided directly for this variable
+    if hasattr(args, variable_name.lower()) and getattr(args, variable_name.lower()) is not None:
+        print(f"Using {variable_name} from command line argument.")
+        return getattr(args, variable_name.lower())
+
+    # 2. Check environment variables
+    value = os.getenv(variable_name)
+    if value:
+        print(f"Using {variable_name} from environment variable.")
+        return value
+
+    # 3. Check .env file
+    load_dotenv()  # Load environment variables from .env file
+    value = os.getenv(variable_name)
+    if value:
+        print(f"Using {variable_name} from .env file.")
+        return value
+
+    # 4. Prompt the user
+    while True:
+        user_input = input(prompt_message).strip()
+        if user_input:
+            print(f"Using {variable_name} from user input.")
+            return user_input
+        else:
+            print("Input cannot be empty. Please provide a value.")
+
+if __name__ == "__main__":
+    # Example usage:
+    # Let's say we need an API_KEY
+    api_key = get_variable("API_KEY", "Please enter your API Key: ")
+    print(f"\nYour API Key is: {api_key}")
+
+    # Another example: DATABASE_URL
+    database_url = get_variable("DATABASE_URL", "Please enter your Database URL: ")
+    print(f"Your Database URL is: {database_url}")
+
+    # You can now use api_key and database_url in your application logic
+    # For example, connect to an API or database
+    print("\nScript execution continues with the retrieved variables...")
+
