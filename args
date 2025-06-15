@@ -8,14 +8,15 @@ def get_variable(variable_name, prompt_message, default_value=None):
     1. Command line argument
     2. Environment variable
     3. .env file
-    4. Optional default value
-    5. User prompt
+    4. Optional default value (if user input is blank)
+    5. User prompt (if default_value is None and user input is blank)
 
     Args:
         variable_name (str): The name of the variable to retrieve (e.g., 'API_KEY').
         prompt_message (str): The message to display if prompting the user.
         default_value (str, optional): A default value to use if the variable is not found
-                                       through other means. Defaults to None.
+                                       through other means AND the user provides blank input.
+                                       Defaults to None.
 
     Returns:
         str: The value of the variable.
@@ -43,38 +44,45 @@ def get_variable(variable_name, prompt_message, default_value=None):
         print(f"Using {variable_name} from .env file.")
         return value
 
-    # 4. Use optional default value if provided
-    if default_value is not None:
-        print(f"Using default value for {variable_name}.")
-        return default_value
-
-    # 5. Prompt the user
+    # 4. Prompt the user (with consideration for blank input and default_value)
+    prompt_suffix = f" (default: '{default_value}')" if default_value is not None else ""
     while True:
-        user_input = input(prompt_message).strip()
-        if user_input:
+        user_input = input(f"{prompt_message}{prompt_suffix}").strip()
+
+        if user_input: # User provided non-blank input
             print(f"Using {variable_name} from user input.")
             return user_input
-        else:
-            print("Input cannot be empty. Please provide a value.")
+        elif default_value is not None: # User provided blank input and a default exists
+            print(f"Using default value for {variable_name} due to blank user input.")
+            return default_value
+        else: # User provided blank input but no default value exists
+            print("Input cannot be empty and no default value is provided. Please provide a value.")
 
 if __name__ == "__main__":
-    print("--- Testing API_KEY ---")
-    # Example 1: No default, will prompt if not found
+    print("--- Testing API_KEY (no default, will force input) ---")
+    # Example 1: No default, will prompt and require input
     api_key = get_variable("API_KEY", "Please enter your API Key: ")
     print(f"Your API Key is: {api_key}\n")
 
-    print("--- Testing DATABASE_URL (with default) ---")
-    # Example 2: With a default value
+    print("--- Testing DATABASE_URL (with default, can accept blank) ---")
+    # Example 2: With a default value, user can press Enter to use default
     database_url = get_variable("DATABASE_URL",
                                 "Please enter your Database URL: ",
                                 default_value="sqlite:///my_database.db")
     print(f"Your Database URL is: {database_url}\n")
 
-    print("--- Testing LOG_LEVEL (with default) ---")
-    # Example 3: Another variable with a default
+    print("--- Testing LOG_LEVEL (with default, can accept blank) ---")
+    # Example 3: Another variable with a default, user can press Enter to use default
     log_level = get_variable("LOG_LEVEL",
                              "Please enter your desired log level (e.g., INFO, DEBUG): ",
                              default_value="INFO")
     print(f"Your Log Level is: {log_level}\n")
+
+    print("--- Testing USERNAME (no default, but blank is accepted for demonstration) ---")
+    # Example 4: No default, but let's test a scenario where we still need input
+    # If the user enters a blank line here, they will be prompted again until valid input is given.
+    username = get_variable("USERNAME", "Please enter your username: ")
+    print(f"Your Username is: {username}\n")
+
 
     print("\nScript execution continues with the retrieved variables...")
